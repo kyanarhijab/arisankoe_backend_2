@@ -4,10 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Repositories\ParticipantRepository;
+use Illuminate\Support\Facades\Auth;
 
 class ParticipantController extends Controller
 {
+
+     protected $participantRepo;
+
+    public function __construct(ParticipantRepository $participantRepo)
+    {
+        $this->participantRepo = $participantRepo;
+    }
+
     /**
      * GET /participants?group_id=1
      * List peserta dalam satu group
@@ -20,21 +29,7 @@ class ParticipantController extends Controller
         ]);
         */
 
-        $data = DB::select("
-            SELECT 
-                p.id,
-                p.user_id,
-                u.name AS user_name,
-                p.group_id,
-                ag.name as group_name,
-                p.join_date,
-                p.status
-            FROM participants p
-            JOIN users u ON u.username = p.user_id
-            JOIN arisan_groups ag on ag.kode = p.group_id
-            WHERE p.group_id = ?
-            ORDER BY p.user_id
-        ", [$request->group_id]);
+        $data = $this->participantRepo->getAll($request->group_id);
 
         return response()->json([
             'data' => $data
@@ -52,26 +47,14 @@ class ParticipantController extends Controller
             'users'    => 'required|array|min:1',
         ]);
 
-        $inserted = 0;
+         $inserted = 0;
 
         foreach ($request->users as $userId) {
 
-            // cek apakah sudah join
-            $exists = DB::selectOne("
-                SELECT id FROM participants
-                WHERE user_id = ? AND group_id = ?
-            ", [$userId, $request->group_id]);
-
-            if ($exists) {
-                continue; // skip kalau sudah ada
+            if ($this->participantRepo->addParticipant($userId, $request->group_id)) {
+                $inserted++;
             }
 
-            DB::insert("
-                INSERT INTO participants (user_id, group_id, join_date, status)
-                VALUES (?, ?, CURDATE(), 'active')
-            ", [$userId, $request->group_id]);
-
-            $inserted++;
         }
 
         if ($inserted === 0) {
@@ -83,6 +66,7 @@ class ParticipantController extends Controller
         return response()->json([
             'message' => "$inserted peserta berhasil ditambahkan"
         ]);
+       
     }
 
     /**
@@ -95,11 +79,16 @@ class ParticipantController extends Controller
             'status' => 'required|in:active,resign'
         ]);
 
-        DB::update("
-            UPDATE participants 
-            SET status = ?
-            WHERE id = ?
-        ", [$request->status, $id]);
+        $updated = $this->participantRepo->updateStatus(
+            $id,
+            $request->status
+        );
+
+        if (!$updated) {
+            return response()->json([
+                'message' => 'Peserta tidak ditemukan'
+            ], 404);
+        }
 
         return response()->json([
             'message' => 'Status peserta berhasil diperbarui'
@@ -112,9 +101,10 @@ class ParticipantController extends Controller
      */
     public function destroy($id)
     {
-        DB::delete("
-            DELETE FROM participants WHERE id = ?
-        ", [$id]);
+
+        $deleted = $this->participantRepo->deleted(
+            $id
+        );
 
         return response()->json([
             'message' => 'Peserta berhasil dihapus'

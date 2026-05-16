@@ -16,10 +16,10 @@ return new class extends Migration
 
             $table->string('group_id', 10);
             $table->string('winner_id', 50);
-            $table->foreign(['group_id', 'winner_id'])
-                  ->references(['group_id', 'user_id'])
+            $table->foreign(['winner_id', 'group_id'])
+                  ->references(['user_id', 'group_id'])
                   ->on('participants')
-                  ->onDelete('set null'); 
+                  ->onDelete('cascade'); 
             $table->integer('round_numbers');
             $table->date('draw_date')->default(DB::raw('CURRENT_DATE'));
             $table->string('notes', 500);

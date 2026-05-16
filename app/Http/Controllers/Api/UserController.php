@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -80,8 +81,12 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
+         /** @var \App\Models\User|null $user */
+        $idx = Auth::id();
+        //$username = $id?->username;
+
         // optional: cegah hapus diri sendiri
-        if (auth()->id() === $user->id) {
+        if ($idx === $user->id) {
             return response()->json([
                 'message' => 'Tidak bisa menghapus user yang sedang login'
             ], 403);

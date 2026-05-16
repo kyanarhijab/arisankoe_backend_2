@@ -4,29 +4,27 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Repositories\GroupRepository;
+use Illuminate\Support\Facades\Auth;
+
 
 class GroupController extends Controller
 {
+
+    protected $groupRepo;
+
+    public function __construct(GroupRepository $groupRepo)
+    {
+        $this->groupRepo = $groupRepo;
+    }
+
     // ======================
     // GET LIST GROUP
     // ======================
     public function index()
     {
-        $data = DB::select("
-            SELECT
-                id,
-                kode,
-                name,
-                description,
-                total_rounds,
-                amount,
-                start_date,
-                status,
-                created_at
-            FROM arisan_groups
-            ORDER BY created_at DESC
-        ");
+
+        $data = $this->groupRepo->getAll();
 
         return response()->json([
             'success' => true,
@@ -45,21 +43,24 @@ class GroupController extends Controller
             'total_rounds' => 'required|integer|min:1',
             'amount' => 'required|numeric|min:0',
             'start_date' => 'required|date',
+        ], [
+            'kode.required' => 'Kode arisan wajib diisi',
+            'kode.unique' => 'Kode arisan sudah dipakai, gunakan kode lain'
         ]);
 
-        DB::insert("
-            INSERT INTO arisan_groups
-            (kode, name, description, total_rounds, amount, start_date, status, created_by, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())
-        ", [
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+        $username = $user?->username;
+
+        $inserted = $this->groupRepo->insertGroup(
             $request->kode,
             $request->name,
             $request->description,
             $request->total_rounds,
             $request->amount,
             $request->start_date,
-            auth()->user()->username ?? null
-        ]);
+            $username
+        );
 
         return response()->json([
             'message' => 'Group arisan berhasil dibuat'
@@ -79,26 +80,15 @@ class GroupController extends Controller
             'status' => 'required|in:active,finished',
         ]);
 
-        DB::update("
-            UPDATE arisan_groups
-            SET
-                name = ?,
-                description = ?,
-                total_rounds = ?,
-                amount = ?,
-                start_date = ?,
-                status = ?,
-                updated_at = NOW()
-            WHERE id = ?
-        ", [
+        $this->groupRepo->updateGroup(
+            $id,
             $request->name,
             $request->description,
             $request->total_rounds,
             $request->amount,
             $request->start_date,
-            $request->status,
-            $id
-        ]);
+            $request->status
+        );
 
         return response()->json([
             'message' => 'Group arisan berhasil diupdate'
@@ -110,13 +100,24 @@ class GroupController extends Controller
     // ======================
     public function destroy($id)
     {
-        DB::delete("
-            DELETE FROM arisan_groups
-            WHERE id = ?
-        ", [$id]);
+        $this->groupRepo->delete($id);
 
         return response()->json([
             'message' => 'Group arisan berhasil dihapus'
         ]);
     }
+
+    public function exportExcel(Request $request)
+    {
+        $group_id = $request->group_id;
+
+        $data = $this->groupRepo->getExportExcel($group_id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
+    }
+    
+
 }
